@@ -10,88 +10,54 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => {
-    // Check for stored token and user data
-    const token = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (token && storedUser && storedUser !== 'undefined') {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-        setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-        fetchProfile(userData.id);
-      } catch (e) {
-        console.error('Error parsing stored user data:', e);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-      }
-    }
-
-    setIsLoading(false);
-    setIsInitialized(true);
-
-    // Handle visibility change to prevent unnecessary re-loading
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isInitialized) {
-        // Check if token is still valid
-        const currentToken = localStorage.getItem('token');
-        const currentUser = localStorage.getItem('user');
-
-        if (currentToken && currentUser && currentUser !== 'undefined') {
-          try {
-            const userData = JSON.parse(currentUser);
-            if (userData?.id !== user?.id) {
-              setUser(userData);
-              setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-              fetchProfile(userData.id);
-            }
-          } catch (e) {
-            console.error('Error parsing current user data on visibility change:', e);
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
-            setUser(null);
-            setProfile(null);
-            setIsAdmin(false);
-          }
-        } else {
-          setUser(null);
-          setProfile(null);
-          setIsAdmin(false);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isInitialized, user]);
-
-  const fetchProfile = async (userId) => {
+  // Function to fetch the currently authenticated user's data
+  const fetchCurrentUser = async () => {
     try {
-      const response = await apiClient.get(`/auth/profile/${userId}`);
-      setProfile(response.data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      setProfile(null);
-    }
-  };
-
-  const signIn = async (email, password) => {
-    try {
-      const response = await apiClient.post('/auth/login', { email, password });
-      const { token, user: userData } = response.data;
-
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      // Assuming the backend has an endpoint to get the current user's data based on the cookie
+      const response = await apiClient.get('/auth/me'); 
+      const userData = response.data.user; // Assuming response structure { user: {...} }
+      
+      if (!userData) throw new Error('User data missing from /auth/me response');
 
       setUser(userData);
       setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-      fetchProfile(userData.id);
+      
+      // Fetch full profile data using the ID from the /auth/me response
+      const profileResponse = await apiClient.get(`/auth/profile/${userData.id}`);
+      setProfile(profileResponse.data);
+      
+      return userData;
+    } catch (error) {
+      // 401 or other error means no active session
+      setUser(null);
+      setProfile(null);
+      setIsAdmin(false);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      setIsLoading(true);
+      await fetchCurrentUser();
+      setIsLoading(false);
+    };
+    
+    checkAuthStatus();
+  }, []); // Run only once on mount
+
+  const signIn = async (email, password) => {
+    try {
+      // Backend sets HTTP-only cookie upon successful login
+      await apiClient.post('/auth/login', { email, password });
+      
+      // Fetch user data immediately after successful login
+      const userData = await fetchCurrentUser();
+
+      if (!userData) {
+        throw new Error('Login successful but user data could not be retrieved.');
+      }
 
       return { error: null };
     } catch (error) {
@@ -101,20 +67,19 @@ export function AuthProvider({ children }) {
 
   const signUp = async (email, password, displayName) => {
     try {
-      const response = await apiClient.post('/auth/register', {
+      // Backend sets HTTP-only cookie upon successful registration
+      await apiClient.post('/auth/register', {
         email,
         password,
         name: displayName
       });
 
-      const { accessToken, user: userData } = response.data;
+      // Fetch user data immediately after successful registration
+      const userData = await fetchCurrentUser();
 
-      localStorage.setItem('token', accessToken);
-      localStorage.setItem('user', JSON.stringify(userData));
-
-      setUser(userData);
-      setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-      fetchProfile(userData.id);
+      if (!userData) {
+        throw new Error('Registration successful but user data could not be retrieved.');
+      }
 
       return { error: null };
     } catch (error) {
@@ -128,16 +93,8 @@ export function AuthProvider({ children }) {
       setUser(null);
       setProfile(null);
 
-      // Clear local storage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-
-      // Optional: Call logout endpoint to invalidate token on server
-      try {
-        await apiClient.post('/auth/logout');
-      } catch (error) {
-        // Ignore logout endpoint errors
-      }
+      // Call logout endpoint to clear cookie on server
+      await apiClient.post('/auth/logout');
     } catch (err) {
       console.error('Sign out error:', err);
     } finally {
