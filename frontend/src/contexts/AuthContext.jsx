@@ -17,11 +17,17 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
-    if (token && storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-      fetchProfile(userData.id);
+    if (token && storedUser && storedUser !== 'undefined') {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
+        fetchProfile(userData.id);
+      } catch (e) {
+        console.error('Error parsing stored user data:', e);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
     }
 
     setIsLoading(false);
@@ -34,12 +40,21 @@ export function AuthProvider({ children }) {
         const currentToken = localStorage.getItem('token');
         const currentUser = localStorage.getItem('user');
 
-        if (currentToken && currentUser) {
-          const userData = JSON.parse(currentUser);
-          if (userData?.id !== user?.id) {
-            setUser(userData);
-            setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
-            fetchProfile(userData.id);
+        if (currentToken && currentUser && currentUser !== 'undefined') {
+          try {
+            const userData = JSON.parse(currentUser);
+            if (userData?.id !== user?.id) {
+              setUser(userData);
+              setIsAdmin(userData.email === 'hari.2408dt@gmail.com');
+              fetchProfile(userData.id);
+            }
+          } catch (e) {
+            console.error('Error parsing current user data on visibility change:', e);
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            setUser(null);
+            setProfile(null);
+            setIsAdmin(false);
           }
         } else {
           setUser(null);
