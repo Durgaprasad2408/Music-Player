@@ -28,6 +28,7 @@ router.post('/refresh', validate(refreshTokenSchema), refreshToken);
 // Protected routes
 router.use(protect); // All routes below require authentication
 
+router.get('/me', getProfile);
 router.post('/logout', logout);
 router.get('/profile', getProfile);
 router.put('/profile', validate(updateProfileSchema), updateProfile);
