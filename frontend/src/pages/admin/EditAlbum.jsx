@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Image, X, Music, Save, ArrowLeft } from 'lucide-react';
 
@@ -26,13 +26,8 @@ const EditAlbum = () => {
 
   const fetchAlbum = async () => {
     try {
-      const { data, error } = await supabase
-        .from('albums')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const response = await apiClient.get(`/albums/${id}`);
+      const data = response.data;
 
       setAlbum(data);
       setTitle(data.title);
@@ -95,45 +90,28 @@ const EditAlbum = () => {
     
     try {
       let coverUrl = album.cover_url;
-      
+
       // Upload new cover if selected
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const sanitizedTitle = sanitizeFileName(title);
-        const fileName = `${sanitizedTitle}-${Date.now()}.${fileExt}`;
-        const filePath = `covers/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, coverFile);
-        
-        if (uploadError) {
-          throw new Error('Error uploading cover image');
-        }
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'covers');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        coverUrl = uploadResponse.data.url;
       }
-      
+
       // Update album
-      const { error: updateError } = await supabase
-        .from('albums')
-        .update({
-          title,
-          artist,
-          cover_url: coverUrl,
-        })
-        .eq('id', album.id);
-      
-      if (updateError) {
-        throw new Error('Error updating album');
-      }
-      
+      await apiClient.put(`/albums/${album.id}`, {
+        title,
+        artist,
+        cover_url: coverUrl,
+      });
+
       navigate(`/admin/albums/${album.id}`);
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       console.error('Album update error:', err);

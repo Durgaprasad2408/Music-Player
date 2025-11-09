@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, Plus, Edit2, Trash2, Image, X, Save } from 'lucide-react';
 
 const Moods = () => {
@@ -19,13 +19,12 @@ const Moods = () => {
 
   const fetchMoods = async () => {
     try {
-      const { data, error } = await supabase
-        .from('moods')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setMoods(data || []);
+      const response = await apiClient.get('/moods');
+      if (response.data.success) {
+        setMoods(response.data.data.moods || []);
+      } else {
+        throw new Error('Failed to fetch moods');
+      }
     } catch (err) {
       console.error('Error fetching moods:', err);
     } finally {
@@ -65,46 +64,41 @@ const Moods = () => {
       let coverUrl = null;
 
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const fileName = `moods/${newMood.toLowerCase().replace(/\s+/g, '-')}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(fileName, coverFile);
-        
-        if (uploadError) throw uploadError;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(fileName);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'moods');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data.success) {
+          coverUrl = uploadResponse.data.data.url;
+        } else {
+          throw new Error('Error uploading cover image');
+        }
       }
 
       if (editingMood) {
         // Update existing mood
-        const { error: updateError } = await supabase
-          .from('moods')
-          .update({
-            name: newMood,
-            description: description.trim() || null,
-            cover_url: coverUrl || undefined,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingMood);
+        const updateResponse = await apiClient.put(`/moods/${editingMood}`, {
+          name: newMood,
+          description: description.trim() || null,
+          cover_url: coverUrl || undefined,
+        });
 
-        if (updateError) throw updateError;
+        if (!updateResponse.data.success) throw new Error('Failed to update mood');
       } else {
         // Create new mood
-        const { error: insertError } = await supabase
-          .from('moods')
-          .insert({
-            name: newMood,
-            description: description.trim() || null,
-            cover_url: coverUrl
-          });
+        const createResponse = await apiClient.post('/moods', {
+          name: newMood,
+          description: description.trim() || null,
+          cover_url: coverUrl
+        });
 
-        if (insertError) throw insertError;
+        if (!createResponse.data.success) throw new Error('Failed to create mood');
       }
 
       // Refresh moods list
@@ -128,13 +122,12 @@ const Moods = () => {
     if (!confirm('Are you sure you want to delete this mood?')) return;
 
     try {
-      const { error } = await supabase
-        .from('moods')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      await fetchMoods();
+      const response = await apiClient.delete(`/moods/${id}`);
+      if (response.data.success) {
+        await fetchMoods();
+      } else {
+        throw new Error('Failed to delete mood');
+      }
     } catch (err) {
       console.error('Error deleting mood:', err);
       setError('Failed to delete mood');

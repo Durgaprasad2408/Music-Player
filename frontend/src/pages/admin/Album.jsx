@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, ArrowLeft, Edit, Trash2, Play, Pause, Plus } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { formatTime } from '../../utils/formatters';
@@ -29,34 +29,21 @@ export default function AdminAlbum() {
   const fetchAlbumAndTracks = async () => {
     try {
       // Get album details
-      const { data: albumData, error: albumError } = await supabase
-        .from('albums')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (albumError) throw albumError;
+      const albumResponse = await apiClient.get(`/albums/${id}`);
+      const albumData = albumResponse.data;
       setAlbum(albumData);
 
       // Get tracks in album
-      const { data: tracksData, error: tracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .eq('album_id', id)
-        .order('created_at');
-
-      if (tracksError) throw tracksError;
-      setTracks(tracksData || []);
+      const tracksResponse = await apiClient.get('/tracks', {
+        params: { album_id: id, order: 'created_at' }
+      });
+      setTracks(tracksResponse.data || []);
 
       // Get available tracks (tracks not in any album)
-      const { data: availableTracksData, error: availableTracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .is('album_id', null)
-        .order('title');
-
-      if (availableTracksError) throw availableTracksError;
-      setAvailableTracks(availableTracksData || []);
+      const availableResponse = await apiClient.get('/tracks', {
+        params: { album_id: null }
+      });
+      setAvailableTracks(availableResponse.data || []);
     } catch (err) {
       console.error('Error fetching album:', err);
       setError('Failed to load album');
@@ -69,12 +56,7 @@ export default function AdminAlbum() {
     if (!album || !confirm('Are you sure you want to delete this album?')) return;
 
     try {
-      const { error } = await supabase
-        .from('albums')
-        .delete()
-        .eq('id', album.id);
-
-      if (error) throw error;
+      await apiClient.delete(`/albums/${album.id}`);
       navigate('/admin/albums');
     } catch (err) {
       console.error('Error deleting album:', err);
@@ -103,12 +85,10 @@ export default function AdminAlbum() {
 
     try {
       // Update tracks with album_id
-      const { error: updateError } = await supabase
-        .from('tracks')
-        .update({ album_id: id })
-        .in('id', Array.from(selectedTracks));
-
-      if (updateError) throw updateError;
+      await apiClient.put('/tracks/batch', {
+        trackIds: Array.from(selectedTracks),
+        updates: { album_id: id }
+      });
 
       // Refresh data
       await fetchAlbumAndTracks();

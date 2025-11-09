@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, Play, Pause, ArrowLeft, Download, Plus, X, Trash2 } from 'lucide-react';
 import { usePlayer } from '../../contexts/PlayerContext';
 import { formatTime } from '../../utils/formatters';
@@ -31,34 +31,21 @@ const ArtistDetails = () => {
   const fetchArtistAndTracks = async () => {
     try {
       // Get artist details
-      const { data: artistData, error: artistError } = await supabase
-        .from('artists')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (artistError) throw artistError;
+      const artistResponse = await apiClient.get(`/artists/${id}`);
+      const artistData = artistResponse.data;
       setArtist(artistData);
 
       // Get tracks by artist
-      const { data: tracksData, error: tracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .eq('artist', artistData.name)
-        .order('created_at', { ascending: false });
-
-      if (tracksError) throw tracksError;
-      setTracks(tracksData || []);
+      const tracksResponse = await apiClient.get('/tracks', {
+        params: { artist: artistData.name, order: 'created_at', sort: 'desc' }
+      });
+      setTracks(tracksResponse.data || []);
 
       // Get available tracks (tracks not assigned to this artist)
-      const { data: availableTracksData, error: availableTracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .neq('artist', artistData.name)
-        .order('title');
-
-      if (availableTracksError) throw availableTracksError;
-      setAvailableTracks(availableTracksData || []);
+      const availableResponse = await apiClient.get('/tracks', {
+        params: { exclude_artist: artistData.name }
+      });
+      setAvailableTracks(availableResponse.data || []);
     } catch (error) {
       console.error('Error fetching artist:', error);
       setError('Failed to load artist');
@@ -92,12 +79,10 @@ const ArtistDetails = () => {
 
     try {
       // Update tracks with new artist
-      const { error: updateError } = await supabase
-        .from('tracks')
-        .update({ artist: artist.name })
-        .in('id', Array.from(selectedTracks));
-
-      if (updateError) throw updateError;
+      await apiClient.put('/tracks/batch', {
+        trackIds: Array.from(selectedTracks),
+        updates: { artist: artist.name }
+      });
 
       // Refresh data
       await fetchArtistAndTracks();
@@ -115,12 +100,7 @@ const ArtistDetails = () => {
     if (!confirm('Are you sure you want to remove this track from the artist?')) return;
 
     try {
-      const { error } = await supabase
-        .from('tracks')
-        .update({ artist: '' }) // Changed from null to empty string
-        .eq('id', trackId);
-
-      if (error) throw error;
+      await apiClient.put(`/tracks/${trackId}`, { artist: '' });
 
       // Refresh tracks list
       setTracks(tracks.filter(t => t.id !== trackId));

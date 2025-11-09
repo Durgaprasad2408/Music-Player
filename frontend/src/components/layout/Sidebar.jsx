@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Search, Library, Plus, Music, Users, Settings, User, LogOut, Disc, ListMusic } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import classNames from 'classnames';
 
 const Sidebar = () => {

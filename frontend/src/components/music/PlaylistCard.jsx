@@ -3,7 +3,7 @@ import { formatDate } from '../../utils/formatters';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 
 const PlaylistCard = ({ playlist, onClick, showOptions = true }) => {
   const navigate = useNavigate();
@@ -28,12 +28,7 @@ const PlaylistCard = ({ playlist, onClick, showOptions = true }) => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('playlist_tracks')
-        .delete()
-        .eq('playlist_id', playlist.id);
-
-      if (error) throw error;
+      await apiClient.delete(`/playlists/${playlist.id}/tracks`);
 
       // Refresh the page or update state as needed
       window.location.reload();

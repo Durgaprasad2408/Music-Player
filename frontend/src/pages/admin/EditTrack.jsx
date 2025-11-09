@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, Image, X, Save, ArrowLeft, ArrowRight } from 'lucide-react';
 
 const EditTrack = () => {
@@ -35,22 +35,12 @@ const EditTrack = () => {
   const fetchCategories = async () => {
     try {
       // Fetch genres
-      const { data: genresData, error: genresError } = await supabase
-        .from('genres')
-        .select('*')
-        .order('name');
-
-      if (genresError) throw genresError;
-      setGenres(genresData || []);
+      const genresResponse = await apiClient.get('/genres');
+      setGenres(genresResponse.data || []);
 
       // Fetch moods
-      const { data: moodsData, error: moodsError } = await supabase
-        .from('moods')
-        .select('*')
-        .order('name');
-
-      if (moodsError) throw moodsError;
-      setMoods(moodsData || []);
+      const moodsResponse = await apiClient.get('/moods');
+      setMoods(moodsResponse.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -58,13 +48,8 @@ const EditTrack = () => {
 
   const fetchTrack = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tracks')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (error) throw error;
+      const response = await apiClient.get(`/tracks/${id}`);
+      const data = response.data;
 
       setTrack(data);
       setTitle(data.title);
@@ -84,10 +69,10 @@ const EditTrack = () => {
 
   const fetchAdjacentTracks = async () => {
     try {
-      const { data: tracks } = await supabase
-        .from('tracks')
-        .select('id, created_at')
-        .order('created_at', { ascending: false });
+      const response = await apiClient.get('/tracks', {
+        params: { order: 'created_at', sort: 'desc' }
+      });
+      const tracks = response.data;
 
       if (!tracks) return;
 
@@ -152,49 +137,32 @@ const EditTrack = () => {
     
     try {
       let coverUrl = track.cover_url;
-      
+
       // Upload new cover if selected
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const sanitizedTitle = sanitizeFileName(title);
-        const fileName = `${sanitizedTitle}-${Date.now()}.${fileExt}`;
-        const filePath = `covers/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, coverFile);
-        
-        if (uploadError) {
-          throw new Error('Error uploading cover image');
-        }
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'covers');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        coverUrl = uploadResponse.data.url;
       }
-      
+
       // Update track
-      const { error: updateError } = await supabase
-        .from('tracks')
-        .update({
-          title,
-          artist,
-          album,
-          genre_id: genre || null,
-          mood_id: mood || null,
-          release_year: releaseYear ? parseInt(releaseYear) : null,
-          cover_url: coverUrl,
-        })
-        .eq('id', track.id);
-      
-      if (updateError) {
-        throw new Error('Error updating track');
-      }
-      
+      await apiClient.put(`/tracks/${track.id}`, {
+        title,
+        artist,
+        album,
+        genre_id: genre || null,
+        mood_id: mood || null,
+        release_year: releaseYear ? parseInt(releaseYear) : null,
+        cover_url: coverUrl,
+      });
+
       navigate('/admin/tracks');
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       console.error('Track update error:', err);

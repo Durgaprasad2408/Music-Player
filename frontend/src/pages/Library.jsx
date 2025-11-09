@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Music } from 'lucide-react';
 import PlaylistCard from '../components/music/PlaylistCard';
@@ -25,46 +24,18 @@ const Library = () => {
   const fetchUserContent = async () => {
     setLoading(true);
     try {
-      // Get user's playlists
-      const { data: playlistsData, error: playlistsError } = await supabase
-        .from('playlists')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-      
-      if (playlistsError) {
-        console.error('Error fetching playlists:', playlistsError);
-      } else {
-        setPlaylists(playlistsData);
-      }
+      // Use demo data instead of Supabase queries
+      setPlaylists(demoPlaylists);
 
-      // Get favorite tracks
+      // Get favorite tracks from demo data if favorites exist
       if (favorites.size > 0) {
-        const { data: favoritesData, error: favoritesError } = await supabase
-          .from('tracks')
-          .select('*')
-          .in('id', Array.from(favorites))
-          .order('created_at', { ascending: false });
-
-        if (favoritesError) {
-          console.error('Error fetching favorite tracks:', favoritesError);
-        } else {
-          setFavoriteTracks(favoritesData || []);
-        }
+        const favoriteIds = Array.from(favorites);
+        const favoritesData = demoTracks.filter(track => favoriteIds.includes(track.id));
+        setFavoriteTracks(favoritesData);
       }
 
-      // Get recent tracks
-      const { data: tracksData, error: tracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(8);
-      
-      if (tracksError) {
-        console.error('Error fetching tracks:', tracksError);
-      } else {
-        setRecentTracks(tracksData);
-      }
+      // Use demo tracks for recent tracks
+      setRecentTracks(demoTracks.slice(0, 8));
     } catch (error) {
       console.error('Unexpected error:', error);
     } finally {

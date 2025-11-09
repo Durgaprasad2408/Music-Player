@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Upload, Save, Mail, Lock, Settings, Edit3, Camera } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 
 const Profile = () => {
   const { user, profile, updateProfile, updatePassword, updateEmail, signOut } = useAuth();
@@ -72,23 +72,21 @@ const Profile = () => {
       
       // Upload avatar if changed
       if (avatarFile) {
-        const fileExt = avatarFile.name.split('.').pop();
-        const fileName = `${user.id}_avatar.${fileExt}`;
-        const filePath = `avatars/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, avatarFile, { upsert: true });
-        
-        if (uploadError) {
+        const formData = new FormData();
+        formData.append('file', avatarFile);
+        formData.append('folder', 'avatars');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data.success) {
+          avatarUrl = uploadResponse.data.data.url;
+        } else {
           throw new Error('Error uploading avatar');
         }
-        
-        const { data } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-          
-        avatarUrl = data.publicUrl;
       }
       
       // Update profile

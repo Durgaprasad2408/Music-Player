@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, Plus, Edit2, Trash2, Image, X, Save } from 'lucide-react';
 
 const Genres = () => {
@@ -19,13 +19,12 @@ const Genres = () => {
 
   const fetchGenres = async () => {
     try {
-      const { data, error } = await supabase
-        .from('genres')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setGenres(data || []);
+      const response = await apiClient.get('/genres');
+      if (response.data.success) {
+        setGenres(response.data.data.genres || []);
+      } else {
+        throw new Error('Failed to fetch genres');
+      }
     } catch (err) {
       console.error('Error fetching genres:', err);
     } finally {
@@ -65,46 +64,41 @@ const Genres = () => {
       let coverUrl = null;
 
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const fileName = `genres/${newGenre.toLowerCase().replace(/\s+/g, '-')}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(fileName, coverFile);
-        
-        if (uploadError) throw uploadError;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(fileName);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'genres');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (uploadResponse.data.success) {
+          coverUrl = uploadResponse.data.data.url;
+        } else {
+          throw new Error('Error uploading cover image');
+        }
       }
 
       if (editingGenre) {
         // Update existing genre
-        const { error: updateError } = await supabase
-          .from('genres')
-          .update({
-            name: newGenre,
-            description: description.trim() || null,
-            cover_url: coverUrl || undefined,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingGenre);
+        const updateResponse = await apiClient.put(`/genres/${editingGenre}`, {
+          name: newGenre,
+          description: description.trim() || null,
+          cover_url: coverUrl || undefined,
+        });
 
-        if (updateError) throw updateError;
+        if (!updateResponse.data.success) throw new Error('Failed to update genre');
       } else {
         // Create new genre
-        const { error: insertError } = await supabase
-          .from('genres')
-          .insert({
-            name: newGenre,
-            description: description.trim() || null,
-            cover_url: coverUrl
-          });
+        const createResponse = await apiClient.post('/genres', {
+          name: newGenre,
+          description: description.trim() || null,
+          cover_url: coverUrl
+        });
 
-        if (insertError) throw insertError;
+        if (!createResponse.data.success) throw new Error('Failed to create genre');
       }
 
       // Refresh genres list
@@ -128,13 +122,12 @@ const Genres = () => {
     if (!confirm('Are you sure you want to delete this genre?')) return;
 
     try {
-      const { error } = await supabase
-        .from('genres')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      await fetchGenres();
+      const response = await apiClient.delete(`/genres/${id}`);
+      if (response.data.success) {
+        await fetchGenres();
+      } else {
+        throw new Error('Failed to delete genre');
+      }
     } catch (err) {
       console.error('Error deleting genre:', err);
       setError('Failed to delete genre');

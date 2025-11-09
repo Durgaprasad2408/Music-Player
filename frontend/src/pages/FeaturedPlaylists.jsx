@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import { Music, ArrowLeft, Search } from 'lucide-react';
 import PlaylistCard from '../components/music/PlaylistCard';
 
@@ -17,14 +17,12 @@ const FeaturedPlaylists = () => {
   const fetchPlaylists = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('playlists')
-        .select('*')
-        .eq('is_featured', true)
-        .order('featured_order', { ascending: true });
-
-      if (error) throw error;
-      setPlaylists(data || []);
+      const response = await apiClient.get('/playlists?featured=true');
+      if (response.data.success) {
+        setPlaylists(response.data.data.playlists || []);
+      } else {
+        throw new Error('Failed to fetch playlists');
+      }
     } catch (error) {
       console.error('Error fetching playlists:', error);
     } finally {

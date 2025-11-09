@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import apiClient from '../lib/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import { Play, Pause, Plus, ArrowLeft, Music } from 'lucide-react';
 import { usePlayer } from '../contexts/PlayerContext';
@@ -29,32 +29,19 @@ const AddTracks = () => {
   const fetchPlaylistAndTracks = async () => {
     try {
       // Get playlist details
-      const { data: playlistData, error: playlistError } = await supabase
-        .from('playlists')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (playlistError) throw playlistError;
+      const response = await apiClient.get(`/playlists/${id}`);
+      const playlistData = response.data;
       setPlaylist(playlistData);
 
       // Get existing playlist tracks
-      const { data: existingTracks, error: existingError } = await supabase
-        .from('playlist_tracks')
-        .select('track_id')
-        .eq('playlist_id', id);
-
-      if (existingError) throw existingError;
+      const existingResponse = await apiClient.get(`/playlists/${id}/tracks`);
+      const existingTracks = existingResponse.data;
 
       const existingTrackIds = new Set(existingTracks.map(pt => pt.track_id));
 
       // Get all available tracks
-      const { data: tracksData, error: tracksError } = await supabase
-        .from('tracks')
-        .select('*')
-        .order('title');
-
-      if (tracksError) throw tracksError;
+      const tracksResponse = await apiClient.get('/tracks');
+      const tracksData = tracksResponse.data;
 
       // Filter out tracks that are already in the playlist
       setTracks(tracksData.filter(track => !existingTrackIds.has(track.id)));
@@ -86,30 +73,10 @@ const AddTracks = () => {
     setError(null);
 
     try {
-      // Get current highest position
-      const { data: currentTracks, error: posError } = await supabase
-        .from('playlist_tracks')
-        .select('position')
-        .eq('playlist_id', id)
-        .order('position', { ascending: false })
-        .limit(1);
-
-      if (posError) throw posError;
-
-      const startPosition = (currentTracks?.[0]?.position || 0) + 1;
-
-      // Prepare tracks to insert
-      const tracksToAdd = Array.from(selectedTracks).map((trackId, index) => ({
-        playlist_id: id,
-        track_id: trackId,
-        position: startPosition + index,
-      }));
-
-      const { error: insertError } = await supabase
-        .from('playlist_tracks')
-        .insert(tracksToAdd);
-
-      if (insertError) throw insertError;
+      // Add tracks to playlist
+      await apiClient.post(`/playlists/${id}/tracks`, {
+        trackIds: Array.from(selectedTracks)
+      });
 
       // Navigate back to playlist
       navigate(`/playlist/${id}`);

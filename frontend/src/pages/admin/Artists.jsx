@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { Music, Plus, Edit2, Trash2, Image, X, Save, Search, ArrowLeft } from 'lucide-react';
 
 const Artists = () => {
@@ -22,13 +22,8 @@ const Artists = () => {
 
   const fetchArtists = async () => {
     try {
-      const { data, error } = await supabase
-        .from('artists')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setArtists(data || []);
+      const response = await apiClient.get('/artists');
+      setArtists(response.data || []);
     } catch (error) {
       console.error('Error fetching artists:', error);
     } finally {
@@ -68,63 +63,35 @@ const Artists = () => {
       let coverUrl = null;
 
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const fileName = `artists/${newArtist.toLowerCase().replace(/\s+/g, '-')}.${fileExt}`;
-        
-        const { error: uploadError, data: uploadData } = await supabase.storage
-          .from('media')
-          .upload(fileName, coverFile, {
-            upsert: true,
-            cacheControl: '3600'
-          });
-        
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw new Error('Failed to upload image');
-        }
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(fileName);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'artists');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        coverUrl = uploadResponse.data.url;
       }
 
       if (editingArtist) {
         // Update existing artist
-        const { error: updateError } = await supabase
-          .from('artists')
-          .update({
-            name: newArtist,
-            bio: bio.trim() || null,
-            image_url: coverUrl || undefined,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingArtist);
-
-        if (updateError) {
-          console.error('Update error:', updateError);
-          throw new Error('Failed to update artist');
-        }
+        await apiClient.put(`/artists/${editingArtist}`, {
+          name: newArtist,
+          bio: bio.trim() || null,
+          image_url: coverUrl || undefined,
+        });
       } else {
         // Create new artist
-        const { error: insertError } = await supabase
-          .from('artists')
-          .insert({
-            name: newArtist,
-            bio: bio.trim() || null,
-            image_url: coverUrl
-          });
-
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          throw new Error('Failed to create artist');
-        }
+        await apiClient.post('/artists', {
+          name: newArtist,
+          bio: bio.trim() || null,
+          image_url: coverUrl
+        });
       }
 
       // Refresh artists list
       await fetchArtists();
-      
+
       // Reset form
       setNewArtist('');
       setBio('');
@@ -143,12 +110,7 @@ const Artists = () => {
     if (!confirm('Are you sure you want to delete this artist?')) return;
 
     try {
-      const { error } = await supabase
-        .from('artists')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.delete(`/artists/${id}`);
       await fetchArtists();
     } catch (err) {
       console.error('Error deleting artist:', err);

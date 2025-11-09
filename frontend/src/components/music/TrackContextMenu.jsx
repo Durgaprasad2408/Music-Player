@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Heart, Share, MoreHorizontal, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePlayer } from '../../contexts/PlayerContext';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 
 const TrackContextMenu = ({ track, isOpen, onClose, position }) => {
   const { user } = useAuth();
@@ -41,29 +41,20 @@ const TrackContextMenu = ({ track, isOpen, onClose, position }) => {
 
   const fetchUserPlaylists = async () => {
     if (!user) return;
-    
+
     setPlaylistLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('playlists')
-        .select('id, title')
-        .eq('user_id', user.id)
-        .eq('is_featured', false)
-        .order('title');
-
-      if (error) throw error;
+      const response = await apiClient.get('/playlists', {
+        params: { user_id: user.id, is_featured: false }
+      });
+      const data = response.data;
       setUserPlaylists(data || []);
 
       // Check which playlists already contain this track
       if (data && data.length > 0 && track) {
-        const { data: existingTracks, error: existingError } = await supabase
-          .from('playlist_tracks')
-          .select('playlist_id')
-          .eq('track_id', track.id)
-          .in('playlist_id', data.map(p => p.id));
+        const existingResponse = await apiClient.get(`/tracks/${track.id}/playlists`);
+        const existingTracks = existingResponse.data;
 
-        if (existingError) throw existingError;
-        
         const existingPlaylistIds = new Set(existingTracks?.map(pt => pt.playlist_id) || []);
         setSelectedPlaylists(existingPlaylistIds);
       }
@@ -102,62 +93,13 @@ const TrackContextMenu = ({ track, isOpen, onClose, position }) => {
 
   const handleSavePlaylistChanges = async () => {
     if (!track || !user) return;
-    
+
     setLoading(true);
     try {
-      // Get current playlist associations
-      const { data: currentAssociations, error: fetchError } = await supabase
-        .from('playlist_tracks')
-        .select('playlist_id')
-        .eq('track_id', track.id)
-        .in('playlist_id', userPlaylists.map(p => p.id));
-
-      if (fetchError) throw fetchError;
-
-      const currentPlaylistIds = new Set(currentAssociations?.map(pt => pt.playlist_id) || []);
-      
-      // Find playlists to add and remove
-      const playlistsToAdd = Array.from(selectedPlaylists).filter(id => !currentPlaylistIds.has(id));
-      const playlistsToRemove = Array.from(currentPlaylistIds).filter(id => !selectedPlaylists.has(id));
-
-      // Remove from playlists
-      if (playlistsToRemove.length > 0) {
-        const { error: removeError } = await supabase
-          .from('playlist_tracks')
-          .delete()
-          .eq('track_id', track.id)
-          .in('playlist_id', playlistsToRemove);
-
-        if (removeError) throw removeError;
-      }
-
-      // Add to playlists
-      for (const playlistId of playlistsToAdd) {
-        // Get current highest position in playlist
-        const { data: currentTracks, error: posError } = await supabase
-          .from('playlist_tracks')
-          .select('position')
-          .eq('playlist_id', playlistId)
-          .order('position', { ascending: false })
-          .limit(1);
-
-        if (posError) throw posError;
-
-        const nextPosition = (currentTracks?.[0]?.position || 0) + 1;
-
-        // Add track to playlist
-        const { error: insertError } = await supabase
-          .from('playlist_tracks')
-          .insert({
-            playlist_id: playlistId,
-            track_id: track.id,
-            position: nextPosition,
-          });
-
-        if (insertError && insertError.code !== '23505') {
-          throw insertError;
-        }
-      }
+      // Update playlist associations
+      await apiClient.put(`/tracks/${track.id}/playlists`, {
+        playlistIds: Array.from(selectedPlaylists)
+      });
 
       alert('Playlist changes saved successfully!');
       setShowPlaylistModal(false);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Image, X, Music } from 'lucide-react';
 
@@ -65,51 +65,33 @@ const CreateFeaturedPlaylist = () => {
     
     try {
       let coverUrl = null;
-      
+
       // Upload cover image if selected
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const sanitizedTitle = sanitizeFileName(title);
-        const timestamp = new Date().getTime();
-        const fileName = `featured-${sanitizedTitle}-${timestamp}.${fileExt}`;
-        const filePath = `playlist-covers/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, coverFile);
-        
-        if (uploadError) {
-          throw new Error('Error uploading cover image');
-        }
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'playlist-covers');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        coverUrl = uploadResponse.data.url;
       }
-      
+
       // Create featured playlist
-      const { data: playlist, error: createError } = await supabase
-        .from('playlists')
-        .insert({
-          title,
-          description: description.trim() || null,
-          user_id: user.id,
-          cover_url: coverUrl,
-          is_featured: true,
-          featured_order: 0 // This will be updated based on existing featured playlists
-        })
-        .select()
-        .single();
-      
-      if (createError) {
-        throw new Error('Error creating playlist');
-      }
-      
+      const response = await apiClient.post('/playlists', {
+        title,
+        description: description.trim() || null,
+        cover_url: coverUrl,
+        is_featured: true,
+        featured_order: 0
+      });
+
+      const playlist = response.data;
+
       // Navigate to the new playlist
       navigate(`/playlist/${playlist.id}`);
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       console.error('Playlist creation error:', err);

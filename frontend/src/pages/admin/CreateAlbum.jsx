@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import apiClient from '../../lib/apiClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { Music, Image, X, Save } from 'lucide-react';
 
@@ -63,45 +63,28 @@ export default function CreateAlbum() {
     
     try {
       let coverUrl = null;
-      
+
       // Upload cover if selected
       if (coverFile) {
-        const fileExt = coverFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const sanitizedTitle = sanitizeFileName(title);
-        const fileName = `${sanitizedTitle}.${fileExt}`;
-        const filePath = `covers/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, coverFile, { upsert: true });
-        
-        if (uploadError) {
-          throw new Error('Error uploading cover image');
-        }
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-          
-        coverUrl = publicUrl;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('folder', 'covers');
+
+        const uploadResponse = await apiClient.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        coverUrl = uploadResponse.data.url;
       }
 
       // Create album
-      const { error: createError } = await supabase
-        .from('albums')
-        .insert({
-          title,
-          artist,
-          cover_url: coverUrl,
-          uploaded_by: user.id,
-        });
-
-      if (createError) {
-        throw new Error('Error creating album');
-      }
+      await apiClient.post('/albums', {
+        title,
+        artist,
+        cover_url: coverUrl,
+      });
 
       navigate('/admin/albums');
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       console.error('Album creation error:', err);
