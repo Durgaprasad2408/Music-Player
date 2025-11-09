@@ -39,7 +39,11 @@ app.use(limiter);
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:5173', // Vite dev server
+    'https://audio4u.vercel.app' // Vercel deployment
+  ],
   credentials: true,
   optionsSuccessStatus: 200
 };
