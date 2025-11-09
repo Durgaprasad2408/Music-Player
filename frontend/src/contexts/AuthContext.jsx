@@ -89,12 +89,12 @@ export function AuthProvider({ children }) {
       const response = await apiClient.post('/auth/register', {
         email,
         password,
-        displayName
+        name: displayName
       });
 
-      const { token, user: userData } = response.data;
+      const { accessToken, user: userData } = response.data;
 
-      localStorage.setItem('token', token);
+      localStorage.setItem('token', accessToken);
       localStorage.setItem('user', JSON.stringify(userData));
 
       setUser(userData);
@@ -103,7 +103,7 @@ export function AuthProvider({ children }) {
 
       return { error: null };
     } catch (error) {
-      return { error: error.response?.data?.message || error.message };
+      return { error: error.response?.data?.error || error.message };
     }
   };
 

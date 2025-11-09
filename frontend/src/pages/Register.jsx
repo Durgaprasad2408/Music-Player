@@ -9,6 +9,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   
   const { signUp } = useAuth();
   const navigate = useNavigate();
@@ -34,15 +35,19 @@ const Register = () => {
     
     setLoading(true);
     setError(null);
-    
+    setSuccess(null);
+
     try {
       const { error } = await signUp(email, password, displayName);
-      
+
       if (error) {
-        setError(error.message);
+        setError(error);
       } else {
-        // On success, redirect to home
-        navigate('/', { replace: true });
+        setSuccess('Account created successfully! Redirecting...');
+        // Show success message for 2 seconds before redirecting
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 2000);
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -59,6 +64,12 @@ const Register = () => {
       {error && (
         <div className="mb-4 p-3 bg-error-900/50 border border-error-800 text-error-200 rounded-lg text-sm">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="mb-4 p-3 bg-success-900/50 border border-success-800 text-success-200 rounded-lg text-sm">
+          {success}
         </div>
       )}
       
