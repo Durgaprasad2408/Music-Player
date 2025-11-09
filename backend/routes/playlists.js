@@ -8,13 +8,15 @@ const {
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
-  getUserPlaylists
+  getUserPlaylists,
+  getFeaturedPlaylists
 } = require('../controllers/playlistController');
 
 const { protect } = require('../middleware/auth');
 
 // Public routes (with optional auth for more content)
 router.get('/', getPlaylists);
+router.get('/featured', getFeaturedPlaylists);
 router.get('/:id', getPlaylist);
 router.get('/user/:userId', getUserPlaylists);
 

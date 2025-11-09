@@ -344,6 +344,36 @@ const removeTrackFromPlaylist = async (req, res) => {
   }
 };
 
+// @desc    Get featured playlists
+// @route   GET /api/playlists/featured
+// @access  Public
+const getFeaturedPlaylists = async (req, res) => {
+  try {
+    const playlists = await Playlist.find({ isFeatured: true })
+      .populate('user', 'name')
+      .populate({
+        path: 'tracks',
+        select: 'title artist album duration',
+        populate: [
+          { path: 'artist', select: 'name' },
+          { path: 'album', select: 'title' }
+        ]
+      })
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: playlists
+    });
+  } catch (error) {
+    console.error('Get featured playlists error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error retrieving featured playlists'
+    });
+  }
+};
+
 // @desc    Get user's playlists
 // @route   GET /api/playlists/user/:userId
 // @access  Public/Private
@@ -389,5 +419,6 @@ module.exports = {
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
-  getUserPlaylists
+  getUserPlaylists,
+  getFeaturedPlaylists
 };
